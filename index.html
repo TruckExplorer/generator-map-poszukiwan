@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Generator Map Poszukiwań Mobile 1.0</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+<style>
+:root{--bg:#0b1220;--panel:#121d2d;--line:#27364a;--text:#e7edf5;--muted:#9db0c5;--accent:#66c28b}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,Arial}.app{display:grid;grid-template-columns:360px 1fr;height:100vh}.side{overflow:auto;padding:18px;background:var(--panel);border-right:1px solid var(--line)}h1{font-size:22px;margin:0 0 6px}h2{font-size:16px;margin:20px 0 8px}.sub{color:var(--muted);font-size:13px;margin-bottom:16px}.input,textarea,button{width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;background:#0c1523;color:var(--text);margin:5px 0;font:inherit}.input:focus,textarea:focus{outline:1px solid var(--accent)}button{cursor:pointer;background:#1d3145;font-weight:600}button.primary{background:#24764a;border-color:#2b9860}button:hover{filter:brightness(1.15)}.row{display:flex;gap:8px}.row>*{flex:1}.small{font-size:12px;color:var(--muted)}.list{padding-left:0;list-style:none}.list li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px;border-bottom:1px solid var(--line);font-size:13px}.parcelrow{display:flex;align-items:center;gap:6px;min-width:0}.parcelrow span{overflow-wrap:anywhere}.parcelrow input{width:auto;margin:0}.list button{width:auto;margin:0;padding:3px 8px}.list button{width:auto;margin:0;padding:3px 8px}.stats{background:#0c1523;border:1px solid var(--line);padding:12px;border-radius:12px}.stat{display:flex;justify-content:space-between;padding:5px 0}.notice{background:#2c2615;border:1px solid #75602c;border-radius:9px;padding:10px;font-size:12px;color:#f0d8a5;margin:12px 0}.section{border-top:1px solid var(--line);padding-top:10px}#map{height:100vh}.leaflet-control-layers{font-size:13px}.footer{font-size:11px;color:var(--muted);margin-top:15px}@media(max-width:800px){.app{grid-template-columns:1fr;grid-template-rows:48vh 52vh;height:100dvh}.side{grid-row:2;padding:12px}#map{grid-row:1;height:48vh}h1{font-size:18px}}
+.print-only{display:none}.printLegend{display:none}.mapbadge{position:absolute;z-index:1000;bottom:12px;left:12px;background:#fff;color:#222;padding:7px 10px;border-radius:8px;box-shadow:0 1px 8px #0003;font-size:12px} @media print{body{background:#fff;color:#111}.printLegend{display:block!important;position:fixed;bottom:8px;left:12px;z-index:2000;background:white;color:#111;border:1px solid #555;padding:8px;font-size:11px;max-width:45vw}.side,.leaflet-control,.leaflet-draw,.leaflet-control-layers{display:none!important}.app{display:block;height:auto}#map{height:85vh;width:100vw}.print-only{display:block!important;position:fixed;top:0;left:0;width:100%;background:white;color:#111;padding:8px 15px;z-index:2000;border-bottom:1px solid #333;font-size:13px}#map{margin-top:80px}.mapbadge{display:none}}
+@media print{ @page{size:A4 landscape;margin:10mm}.printLegend{max-width:38vw;max-height:45vh;overflow:hidden;font-size:10px}#map{height:180mm!important;margin-top:72px!important}.print-only{font-size:12px!important}}
+</style><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0b1220"><link rel="apple-touch-icon" href="icons/icon-192.png"></head><body><div class="app"><aside class="side"><h1>🌲 Generator Map Poszukiwań Mobile 1.0</h1><div class="sub">Panel selekcji działek, kontrola widoczności i eksport wybranego zakresu.</div>
+<h2>0. Znajdź lokalizację</h2><div class="row"><input class="input" id="placeSearch" placeholder="Miejscowość, adres lub miejsce"><button id="searchPlace" style="flex:0 0 100px">Szukaj</button></div><div class="small">Wyszukiwanie lokalizacji (Nominatim). Kliknięcie działki nadal wymaga usługi ULDK.</div>
+<h2>1. Dodaj działki z identyfikatorów</h2><textarea id="parcelIds" rows="4" placeholder="Wklej identyfikatory działek, po jednym w wierszu\nnp. 040.... lub identyfikator EGiB"></textarea><button class="primary" id="loadIds">Pobierz działki z ULDK</button><div class="small">ULDK może wymagać pełnego identyfikatora działki. Wyszukiwanie działa zależnie od dostępności usługi.</div>
+<h2>2. Wybór działek na mapie</h2><div class="notice">Kliknij punkt na mapie, aby spróbować rozpoznać działkę przez ULDK. Jeśli rozpoznanie nie zadziała, użyj identyfikatora działki lub rysowania.</div><div class="row"><button id="drawPoly">Rysuj obszar</button><button id="clearDraw">Usuń wszystko</button></div><div class="row"><button id="toggleClick">Tryb kliknięcia działek: ON</button><button id="selectAll">Zaznacz wszystkie</button></div><div class="row"><button id="fit">Dopasuj do zaznaczeń</button><button id="merge">Obrys zbiorczy</button></div><button id="saveProject">Zapisz projekt w tej przeglądarce</button><button id="restoreProject">Wczytaj zapisany projekt</button>
+<h2>3.0 Automatyczne odkrywanie działek z obszaru</h2><div class="notice">Narysuj poligon na mapie, a następnie uruchom próbkowanie punktów w jego wnętrzu. Usługa ULDK rozpoznaje działki w punktach próbkowania; wynik jest przybliżonym wykryciem, nie gwarantuje kompletności.</div><label class="small" for="gridSpacing">Odstęp próbkowania (m)</label><select class="input" id="gridSpacing"><option value="100">100 m – szybciej, mniej dokładnie</option><option value="60" selected>60 m – ustawienie domyślne</option><option value="35">35 m – gęściej, wolniej</option></select><div class="row"><button class="primary" id="scanArea">Odkryj działki w narysowanym obszarze</button><button id="stopScan">Zatrzymaj</button></div><div id="scanStatus" class="small">Wybierz lub narysuj poligon. Próbkowanie jest ograniczone do 120 punktów na przebieg.</div>
+<h2>3. Zaznaczone obszary · v8</h2><div class="row"><button id="selectIncluded">Zaznacz wszystkie</button><button id="deselectIncluded">Odznacz wszystkie</button></div><div class="row"><button id="showAllLayers">Pokaż wszystkie</button><button id="hideAllLayers">Ukryj wszystkie</button></div><input class="input" id="parcelFilter" placeholder="Filtruj listę działek…"><div class="row"><button id="zoomEach">Podgląd działek</button><button id="copySummary">Kopiuj podsumowanie</button></div><div class="small" id="v7status">Checkbox wybiera element do eksportu; oko kontroluje widoczność na mapie.</div><div class="row"><button id="exportSelectedGeo">Eksport wybranych GeoJSON</button><button id="fitSelected">Dopasuj wybrane</button></div><div class="small">Lista działek / rysunków. Możesz usuwać pojedyncze elementy.</div><ul id="parcelList" class="list"><li class="small">Brak działek. Dodaj identyfikatory lub narysuj obszar.</li></ul>
+<div class="stats"><div class="stat"><span>Obszar łączny (przybliżony)</span><b id="area">0 ha</b></div><div class="stat"><span>Elementy</span><b id="count">0</b></div><div class="stat"><span>Wybrane do eksportu</span><b id="selectedCount">0</b></div></div>
+<h2>4. Narzędzia obszaru</h2><div class="row"><button id="showMerged">Pokaż obrys</button><button id="hideMerged">Ukryj obrys</button></div><button id="exportTxt">Eksport listy działek TXT</button><div class="small">Obrys zbiorczy jest wynikiem operacji na geometrii zaznaczeń; zweryfikuj go z urzędową mapą przed użyciem.</div>
+<h2>4. Dane załącznika mapowego</h2><input class="input" id="applicant" placeholder="Wnioskodawca (opcjonalnie)"><input class="input" id="date" type="date"><h2>5. Informacje do mapy</h2><input class="input" id="title" placeholder="Tytuł mapy" value="Mapa obszaru planowanych poszukiwań"><input class="input" id="forest" placeholder="Nadleśnictwo"><input class="input" id="municipality" placeholder="Gmina / obręb"><input class="input" id="purpose" placeholder="Cel / opis (opcjonalnie)">
+<div class="row"><button class="primary" id="print">Drukuj / zapisz PDF</button><button id="exportGeo">Eksport GeoJSON</button></div><button id="exportKml">Eksport KML (Google Earth)</button><div class="row"><button id="exportProjectFile">Pobierz projekt JSON</button><button id="importProjectFile">Wczytaj JSON</button></div><input id="projectFile" type="file" accept=".json,application/json" style="display:none"><div class="row"><button id="exportCsv">Eksport listy działek CSV</button><button id="exportMerged">Eksport obrysu zbiorczego</button></div>
+<button id="copyIds">Kopiuj listę identyfikatorów</button><div class="notice"><b>Uwaga:</b> aplikacja jest prototypem. Warstwa WMS prezentuje mapę, nie gwarantuje automatycznego pobrania granic każdej działki. Pobieranie geometrii przez ULDK może nie działać dla części identyfikatorów. Sprawdź mapę i zakres przed wysłaniem wniosku.</div><div class="footer">Źródła mapowe: OpenStreetMap oraz opcjonalna warstwa Geoportal EGiB. Nie zastępuje dokumentacji geodezyjnej ani zgód na poszukiwania.</div></aside><main id="map"><div id="printHeader" class="print-only"></div><div id="printLegend" class="printLegend"></div></main></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+// v11: direct additive parcel selection by map tap (no confirmation popup).
+map.off('click');
+map.on('click',async function(e){
+ if(!clickMode)return;
+ const pop=L.popup({closeButton:true}).setLatLng(e.latlng).setContent('<b>Odczyt działki…</b>').openOn(map);
+ try{
+  const result=await lookupXY(e.latlng.lat,e.latlng.lng);
+  const id=String(result.id||'');
+  const already=records.some(r=>String(r.id)===id);
+  if(already){pop.setContent('<b>Ta działka jest już zaznaczona</b><br>'+esc(id));return;}
+  geomLayer(result.geo,id,id);
+  pop.setContent('<b>Dodano działkę:</b><br>'+esc(id)+'<br><small>Kliknij kolejną działkę, aby dodać ją do wspólnego zestawu.</small>');
+ }catch(err){
+  pop.setContent('<b>Nie udało się pobrać geometrii działki.</b><br>'+esc(err?.message||String(err))+'<br><small>Granice widoczne w WMS są obrazem, a nie obiektami wybieralnymi. Pobranie geometrii wymaga działającego zapytania ULDK.</small>');
+ }
+});
+
+</script><script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js">
+</script><script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js">
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4/2.9.0/proj4.min.js"></script>
+<script>
+const map=L.map('map').setView([53.5,18.4],8);const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+const egib=L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow',{layers:'dzialki,numery_dzialek',format:'image/png',transparent:true,version:'1.3.0',attribution:'EGiB / GUGiK'});L.control.layers({'OpenStreetMap':osm},{'EGiB działki (WMS)':egib},{collapsed:true}).addTo(map);
+const drawn=L.featureGroup().addTo(map);let records=[];let mergedLayer=null;let scanStop=false;const style={color:'#d52e36',weight:2.5,fillColor:'#f5c542',fillOpacity:.23};
+function geomLayer(geo,id,label){let l=L.geoJSON(geo,{style});l.eachLayer(x=>{x.feature=x.feature||{};x.feature.properties={...(x.feature.properties||{}),parcelId:id,label:label||id};});drawn.addLayer(l);records.push({id:id||'Rysunek',label:label||id||'Rysunek',geo:geo,layer:l});update();return l}
+function update(){if(mergedLayer){drawn.removeLayer(mergedLayer);mergedLayer=null}const ul=document.getElementById('parcelList');ul.innerHTML='';records.forEach((r,i)=>{let li=document.createElement('li');li.innerHTML=`<span>${esc(r.label||r.id)}</span><button data-i="${i}">Usuń</button>`;ul.appendChild(li);li.querySelector('button').onclick=()=>{drawn.removeLayer(r.layer);records.splice(i,1);update()}});if(!records.length)ul.innerHTML='<li class="small">Brak działek/rysunków.</li>';let area=0;records.forEach(r=>{try{area+=turf.area(r.geo)}catch(e){}});document.getElementById('area').textContent=(area/10000).toLocaleString('pl-PL',{maximumFractionDigits:2})+' ha';document.getElementById('count').textContent=records.length}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function lookup(id){let url='https://uldk.gugik.gov.pl/?request=GetParcelById&id='+encodeURIComponent(id)+'&result=geom_wkt,parcel,voivodeship,county,commune&output=JSON';let resp=await fetch(url);if(!resp.ok)throw Error('HTTP '+resp.status);let data=await resp.json();if(!data||!data[0]||data[0][0]!=='0')throw Error(data?.[0]?.[1]||'Nie znaleziono działki');let wkt=data[1]?.[0];if(!wkt)throw Error('Brak geometrii w odpowiedzi');let geo=turf.wktToGeoJSON(wkt);return geo}
+async function lookupXY(lat,lon){
+ // Leaflet supplies WGS84 lon/lat. ULDK supports explicit SRID in xy,
+ // so send lon,lat,4326 and request returned geometry in EPSG:4326.
+ const xy=lon.toFixed(7)+','+lat.toFixed(7)+',4326';
+ const url='https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy='+encodeURIComponent(xy)+'&result=geom_wkt,teryt,parcel,region,commune,county,voivodeship&srid=4326';
+ let resp;try{resp=await fetch(url,{mode:'cors'});}catch(e){throw Error('Błąd połączenia/CORS z ULDK: '+(e.message||e));}
+ if(!resp.ok)throw Error('ULDK HTTP '+resp.status);
+ const raw=(await resp.text()).trim();
+ const lines=raw.split(/\r?\n/).map(v=>v.trim()).filter(Boolean);
+ if(!lines.length)throw Error('ULDK zwrócił pustą odpowiedź.');
+ if(lines[0]!=='0')throw Error('ULDK status '+lines[0]+': '+lines.slice(1).join(' ').slice(0,220));
+ if(lines.length<2)throw Error('ULDK zgłosił powodzenie, ale nie zwrócił wiersza geometrii.');
+ const fields=lines[1].split('|');
+ let wkt=fields[0];
+ // Some ULDK responses prefix the WKT with an SRID declaration.
+ wkt=wkt.replace(/^SRID=\d+;/i,'').trim();
+ const id=fields[1]||fields[2]||'';
+ if(!wkt||!/[A-Z]+\s*\(/i.test(wkt))throw Error('Nie rozpoznano WKT w odpowiedzi ULDK: '+lines[1].slice(0,180));
+ let geo;try{geo=turf.wktToGeoJSON(wkt)}catch(e){throw Error('Nie udało się przetworzyć WKT: '+e.message+' | '+wkt.slice(0,120));}
+ return {geo,id:id||('Działka '+lat.toFixed(5)+','+lon.toFixed(5))};
+}
+map.on('click',async e=>{let pop=L.popup().setLatLng(e.latlng).setContent('<b>Rozpoznawanie działki…</b>').openOn(map);try{let result=await lookupXY(e.latlng.lat,e.latlng.lng);let already=records.some(r=>String(r.id)===String(result.id));if(already){pop.setContent('Ta działka jest już na liście: '+esc(result.id));return}let btn='<button id="addClickParcel" style="width:100%;padding:8px;margin-top:8px">Dodaj działkę</button>';pop.setContent('<b>Działka:</b> '+esc(result.id)+btn);setTimeout(()=>{let el=document.getElementById('addClickParcel');if(el)el.onclick=()=>{geomLayer(result.geo,result.id,result.id);map.fitBounds(drawn.getBounds(),{padding:[25,25]});map.closePopup()};},50)}catch(err){pop.setContent('<b>Nie udało się rozpoznać działki.</b><br>'+esc(err?.message||String(err))+'<br><small>Sprawdź połączenie internetowe lub użyj identyfikatora działki.</small>')}});
+document.getElementById('loadIds').onclick=async()=>{let ids=document.getElementById('parcelIds').value.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);if(!ids.length){alert('Wpisz co najmniej jeden identyfikator.');return}let b=document.getElementById('loadIds');b.disabled=true;b.textContent='Pobieranie…';let ok=0;for(let id of ids){try{let geo=await lookup(id);geomLayer(geo,id,id);ok++}catch(e){alert('Działka '+id+': '+e.message)}}b.disabled=false;b.textContent='Pobierz działki z ULDK';if(ok){let layers=records.map(r=>r.layer);try{map.fitBounds(drawn.getBounds(),{padding:[25,25]})}catch(e){}}};
+let drawControl;document.getElementById('drawPoly').onclick=()=>{new L.Draw.Polygon(map,{shapeOptions:style}).enable()};map.on(L.Draw.Event.CREATED,e=>{let layer=e.layer;drawn.addLayer(layer);let geo=layer.toGeoJSON();records.push({id:'Rysunek '+(records.length+1),label:'Rysunek '+(records.length+1),geo:geo,layer:layer});update()});document.getElementById('clearDraw').onclick=()=>{records.forEach(r=>drawn.removeLayer(r.layer));records=[];update()};document.getElementById('fit').onclick=()=>{if(drawn.getLayers().length)map.fitBounds(drawn.getBounds(),{padding:[25,25]})};
+function collection(){return {type:'FeatureCollection',features:records.flatMap(r=>{let g=r.geo;return g.type==='Feature'? [{...g,properties:{...(g.properties||{}),parcelId:r.id}}]:[{type:'Feature',properties:{parcelId:r.id},geometry:g}]})}}
+document.getElementById('exportGeo').onclick=()=>{let blob=new Blob([JSON.stringify(collection(),null,2)],{type:'application/geo+json'});download(blob,'obszar_poszukiwan.geojson')};document.getElementById('exportCsv').onclick=()=>{let csv='Dzialka\n'+records.map(r=>'"'+String(r.id).replaceAll('"','""')+'"').join('\n');download(new Blob([csv],{type:'text/csv;charset=utf-8'}),'dzialki.csv')};function download(blob,name){let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+document.getElementById('print').onclick=()=>{document.title=(document.getElementById('title').value||'Mapa')+' - Generator';map.invalidateSize();window.print()};
+
+function mergedGeo(){let feats=collection().features;if(!feats.length)return null;let acc=feats[0];for(let i=1;i<feats.length;i++){try{acc=turf.union(acc,feats[i])||acc}catch(e){/* zachowaj zbiór gdy geometrie się nie przecinają lub biblioteka nie złączy */}}return acc}
+document.getElementById('merge').onclick=()=>{let g=mergedGeo();if(!g){alert('Najpierw zaznacz działki lub obszary.');return}if(mergedLayer)drawn.removeLayer(mergedLayer);mergedLayer=L.geoJSON(g,{style:{color:'#16a34a',weight:4,fillColor:'#22c55e',fillOpacity:.08,dashArray:'6 4'}}).addTo(drawn);map.fitBounds(mergedLayer.getBounds(),{padding:[30,30]});alert('Wyświetlono obrys zbiorczy. To wizualizacja połączenia geometrii; lista działek pozostaje bez zmian.')};
+document.getElementById('exportMerged').onclick=()=>{let g=mergedGeo();if(!g){alert('Brak zaznaczeń.');return}download(new Blob([JSON.stringify(g,null,2)],{type:'application/geo+json'}),'obrys_zbiorczy.geojson')};
+document.getElementById('saveProject').onclick=()=>{let payload={records:records.map(r=>({id:r.id,label:r.label,geo:r.geo})),title:document.getElementById('title').value,forest:document.getElementById('forest').value,municipality:document.getElementById('municipality').value,purpose:document.getElementById('purpose').value};try{localStorage.setItem('generatorMapProject',JSON.stringify(payload));alert('Projekt zapisany w pamięci tej przeglądarki.')}catch(e){alert('Nie udało się zapisać projektu: '+e.message)}};
+document.getElementById('restoreProject').onclick=()=>{try{let payload=JSON.parse(localStorage.getItem('generatorMapProject')||'null');if(!payload){alert('Nie znaleziono zapisanego projektu.');return}records.forEach(r=>drawn.removeLayer(r.layer));records=[];(payload.records||[]).forEach(r=>geomLayer(r.geo,r.id,r.label));['title','forest','municipality','purpose'].forEach(k=>{if(payload[k]!=null)document.getElementById(k).value=payload[k]});if(records.length)map.fitBounds(drawn.getBounds(),{padding:[25,25]});alert('Projekt wczytany.')}catch(e){alert('Błąd wczytywania projektu: '+e.message)}};
+
+// --- Generator v3 enhancements ---
+let clickMode=true;
+const clickBtn=document.getElementById('toggleClick');
+clickBtn.onclick=()=>{clickMode=!clickMode;clickBtn.textContent='Tryb kliknięcia działek: '+(clickMode?'ON':'OFF');clickBtn.style.background=clickMode?'#24764a':'#1d3145'};
+map.off('click');map.on('click',async e=>{if(!clickMode)return;let pop=L.popup().setLatLng(e.latlng).setContent('<b>Rozpoznawanie działki…</b>').openOn(map);try{let result=await lookupXY(e.latlng.lat,e.latlng.lng);let already=records.some(r=>String(r.id)===String(result.id));if(already){pop.setContent('Działka już zaznaczona: '+esc(result.id));return}pop.setContent('<b>Działka:</b> '+esc(result.id)+'<br><small>Dodaj ją do projektu?</small><button id="addClickParcel" style="width:100%;padding:8px;margin-top:8px">Dodaj działkę</button>');setTimeout(()=>{let el=document.getElementById('addClickParcel');if(el)el.onclick=()=>{geomLayer(result.geo,result.id,result.id);map.fitBounds(drawn.getBounds(),{padding:[25,25]});map.closePopup()};},30)}catch(err){pop.setContent('Nie udało się rozpoznać działki. Spróbuj z pełnym identyfikatorem lub ręcznie narysuj obszar.')}});
+document.getElementById('selectAll').onclick=()=>{if(records.length)map.fitBounds(drawn.getBounds(),{padding:[25,25]});else alert('Lista jest pusta.')};
+// More robust project persistence
+const oldSave=document.getElementById('saveProject').onclick;
+document.getElementById('saveProject').onclick=()=>{let payload={records:records.map(r=>({id:r.id,label:r.label,geo:r.geo})),title:document.getElementById('title').value,forest:document.getElementById('forest').value,municipality:document.getElementById('municipality').value,purpose:document.getElementById('purpose').value,applicant:document.getElementById('applicant').value,date:document.getElementById('date').value};try{localStorage.setItem('generatorMapProject',JSON.stringify(payload));alert('Projekt zapisany lokalnie.')}catch(e){alert('Nie udało się zapisać: '+e.message)}};
+const oldRestore=document.getElementById('restoreProject').onclick;
+document.getElementById('restoreProject').onclick=()=>{try{let payload=JSON.parse(localStorage.getItem('generatorMapProject')||'null');if(!payload){alert('Nie znaleziono zapisanego projektu.');return}records.forEach(r=>drawn.removeLayer(r.layer));records=[];(payload.records||[]).forEach(r=>geomLayer(r.geo,r.id,r.label));['title','forest','municipality','purpose','applicant','date'].forEach(k=>{if(payload[k]!=null&&document.getElementById(k))document.getElementById(k).value=payload[k]});if(records.length)map.fitBounds(drawn.getBounds(),{padding:[25,25]});alert('Projekt wczytany.')}catch(e){alert('Błąd wczytywania: '+e.message)}};
+// Prepare a print-ready heading/summary; PDF is generated via browser print dialog.
+document.getElementById('print').onclick=()=>{let names=records.map(r=>r.id).join(', ');let area=document.getElementById('area').textContent;let date=document.getElementById('date').value||new Date().toLocaleDateString('pl-PL');let html=`<strong>${esc(document.getElementById('title').value||'Mapa obszaru planowanych poszukiwań')}</strong><br>Nadleśnictwo: ${esc(document.getElementById('forest').value||'—')} | Gmina/obręb: ${esc(document.getElementById('municipality').value||'—')} | Powierzchnia: ${esc(area)}<br>Wnioskodawca: ${esc(document.getElementById('applicant').value||'—')} | Data: ${esc(date)}<br>Numery/oznaczenia: ${esc(names)}${document.getElementById('purpose').value?'<br>Opis: '+esc(document.getElementById('purpose').value):''}`;document.getElementById('printHeader').innerHTML=html;map.invalidateSize();setTimeout(()=>window.print(),350)};
+// Export KML for Google Earth
+function toKmlCoord(coords){return coords.map(c=>c[0]+','+c[1]+',0').join(' ')}
+function geomKml(g){let geom=g.type==='Feature'?g.geometry:g; if(!geom)return '';if(geom.type==='Polygon')return '<Polygon><outerBoundaryIs><LinearRing><coordinates>'+toKmlCoord(geom.coordinates[0])+'</coordinates></LinearRing></outerBoundaryIs></Polygon>';if(geom.type==='MultiPolygon')return '<MultiGeometry>'+geom.coordinates.map(poly=>'<Polygon><outerBoundaryIs><LinearRing><coordinates>'+toKmlCoord(poly[0])+'</coordinates></LinearRing></outerBoundaryIs></Polygon>').join('')+'</MultiGeometry>';return ''}
+document.getElementById('exportKml').onclick=()=>{if(!records.length){alert('Brak zaznaczeń.');return}let placemarks=records.map(r=>'<Placemark><name>'+esc(r.id)+'</name>'+geomKml(r.geo)+'</Placemark>').join('');let kml='<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>'+esc(document.getElementById('title').value)+'</name>'+placemarks+'</Document></kml>';download(new Blob([kml],{type:'application/vnd.google-earth.kml+xml'}),'obszar_poszukiwan.kml')};
+
+
+// --- Version 4.0 improvements ---
+// More robust merge: attempt dissolve across all geometries using Turf, retaining source data if unsupported.
+function mergedGeoV4(){
+  const feats=collection().features.filter(f=>f.geometry);
+  if(!feats.length)return null;
+  try{
+    let acc=feats[0];
+    for(let i=1;i<feats.length;i++){
+      const result=turf.union(acc,feats[i]);
+      if(result) acc=result;
+    }
+    return acc;
+  }catch(err){console.warn('Dissolve failed; exporting collection instead',err);return null;}
+}
+// Override merge action with dissolve-aware result and explanatory fallback.
+document.getElementById('merge').onclick=()=>{
+  let g=mergedGeoV4();
+  if(!g){alert('Nie udało się połączyć geometrii. Możesz nadal eksportować zaznaczone działki osobno.');return;}
+  if(mergedLayer)drawn.removeLayer(mergedLayer);
+  mergedLayer=L.geoJSON(g,{style:{color:'#16834a',weight:4,fillColor:'#22c55e',fillOpacity:.12,dashArray:'5 4'}}).addTo(drawn);
+  map.fitBounds(mergedLayer.getBounds(),{padding:[30,30]});
+};
+// Save project as portable JSON file and import it from disk.
+document.getElementById('exportProjectFile').onclick=()=>{
+ const payload={version:4,created:new Date().toISOString(),records:records.map(r=>({id:r.id,label:r.label,geo:r.geo})),title:document.getElementById('title').value,forest:document.getElementById('forest').value,municipality:document.getElementById('municipality').value,purpose:document.getElementById('purpose').value,applicant:document.getElementById('applicant').value,date:document.getElementById('date').value};
+ download(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'projekt_mapy_poszukiwan.json');
+};
+document.getElementById('importProjectFile').onclick=()=>document.getElementById('projectFile').click();
+document.getElementById('projectFile').onchange=async e=>{
+ const f=e.target.files?.[0];if(!f)return;
+ try{const payload=JSON.parse(await f.text());if(!Array.isArray(payload.records))throw Error('Plik nie zawiera listy obiektów');
+ records.forEach(r=>drawn.removeLayer(r.layer));records=[];
+ payload.records.forEach(r=>{if(r.geo)geomLayer(r.geo,r.id||'Obiekt',r.label||r.id||'Obiekt')});
+ ['title','forest','municipality','purpose','applicant','date'].forEach(k=>{if(payload[k]!=null&&document.getElementById(k))document.getElementById(k).value=payload[k]});
+ if(records.length)map.fitBounds(drawn.getBounds(),{padding:[25,25]});alert('Projekt zaimportowany.');
+ }catch(err){alert('Nie udało się wczytać projektu: '+err.message)}finally{e.target.value=''}
+};
+// Copy parcel identifiers/list labels
+ document.getElementById('copyIds').onclick=()=>{const txt=records.map(r=>r.id).join('\n');if(!txt){alert('Lista jest pusta.');return}if(navigator.clipboard?.writeText){navigator.clipboard.writeText(txt).then(()=>alert('Skopiowano listę.')).catch(()=>prompt('Skopiuj listę:',txt));}else prompt('Skopiuj listę:',txt)};
+// Improved print sheet: title block, source list, north arrow, scale disclaimer.
+document.getElementById('print').onclick=()=>{
+ const names=records.map(r=>r.id).join(', ');const area=document.getElementById('area').textContent;
+ const date=document.getElementById('date').value||new Date().toLocaleDateString('pl-PL');
+ document.getElementById('printHeader').innerHTML=`<strong style="font-size:17px">${esc(document.getElementById('title').value||'Mapa obszaru planowanych poszukiwań')}</strong><br><div style="margin-top:4px">Nadleśnictwo: ${esc(document.getElementById('forest').value||'—')} | Gmina/obręb: ${esc(document.getElementById('municipality').value||'—')} | Powierzchnia zaznaczenia: ${esc(area)}</div><div>Wnioskodawca: ${esc(document.getElementById('applicant').value||'—')} | Data: ${esc(date)}</div>${document.getElementById('purpose').value?'<div>Opis: '+esc(document.getElementById('purpose').value)+'</div>':''}`;
+ document.getElementById('printLegend').innerHTML=`<b>Legenda</b><br><span style="color:#d52e36">■</span> Działki/obszar zaznaczony<br><b>Lista zaznaczeń:</b><br>${records.map(r=>esc(r.id)).join('<br>')||'—'}<br><br><span style="font-size:10px">Mapa poglądowa. Granice należy zweryfikować w źródłach urzędowych.</span>`;
+ map.invalidateSize();setTimeout(()=>window.print(),350);
+};
+
+
+// --- Generator v5.0 ---
+// Location search via Nominatim, merged geometry visibility, and TXT list export.
+const placeSearch=document.getElementById('placeSearch');
+document.getElementById('searchPlace').onclick=async()=>{const q=placeSearch.value.trim();if(!q){alert('Wpisz nazwę miejscowości lub lokalizacji.');return}const btn=document.getElementById('searchPlace');btn.disabled=true;btn.textContent='Szukam…';try{const url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q='+encodeURIComponent(q);const res=await fetch(url);if(!res.ok)throw Error('Usługa wyszukiwania nie odpowiedziała');const data=await res.json();if(!data.length)throw Error('Nie znaleziono lokalizacji');const item=data[0];map.setView([Number(item.lat),Number(item.lon)],Math.max(13,Number(item.zoom)||13));L.marker([Number(item.lat),Number(item.lon)]).addTo(map).bindPopup(esc(item.display_name)).openPopup();}catch(e){alert('Wyszukiwanie nie powiodło się: '+e.message)}finally{btn.disabled=false;btn.textContent='Szukaj'}};
+document.getElementById('showMerged').onclick=()=>{const g=mergedGeoV4();if(!g){alert('Nie można utworzyć obrysu. Zaznacz geometrię i spróbuj ponownie.');return}if(mergedLayer)drawn.removeLayer(mergedLayer);mergedLayer=L.geoJSON(g,{style:{color:'#16834a',weight:4,fillColor:'#22c55e',fillOpacity:.12,dashArray:'5 4'}}).addTo(drawn);map.fitBounds(mergedLayer.getBounds(),{padding:[30,30]});};
+document.getElementById('hideMerged').onclick=()=>{if(mergedLayer){drawn.removeLayer(mergedLayer);mergedLayer=null}};
+document.getElementById('exportTxt').onclick=()=>{if(!records.length){alert('Brak zaznaczonych działek.');return}const lines=['LISTA DZIAŁEK / OBSZARÓW','Projekt: '+(document.getElementById('title').value||''),'Nadleśnictwo: '+(document.getElementById('forest').value||''),'Gmina / obręb: '+(document.getElementById('municipality').value||''),'Powierzchnia sumaryczna (orientacyjna): '+document.getElementById('area').textContent,'','Lista:'].concat(records.map((r,i)=>(i+1)+'. '+r.id));download(new Blob([lines.join('\n')],{type:'text/plain;charset=utf-8'}),'lista_dzialek.txt')};
+// Version marker and expanded portable project data
+const v5Export=document.getElementById('exportProjectFile').onclick;
+document.getElementById('exportProjectFile').onclick=()=>{const payload={version:5,created:new Date().toISOString(),records:records.map(r=>({id:r.id,label:r.label,geo:r.geo})),title:document.getElementById('title').value,forest:document.getElementById('forest').value,municipality:document.getElementById('municipality').value,purpose:document.getElementById('purpose').value,applicant:document.getElementById('applicant').value,date:document.getElementById('date').value,mapCenter:map.getCenter().toJSON(),mapZoom:map.getZoom()};download(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'projekt_mapy_poszukiwan_v5.json')};
+
+// --- v6/v11 hotfix: robust polygon sampling and ULDK diagnostics ---
+let scanPolygons=[];
+function collectScanPolygons(){return records.map(r=>r.geo).filter(g=>{let geom=g?.type==='Feature'?g.geometry:g;return geom&&(['Polygon','MultiPolygon'].includes(geom.type));});}
+function getFeature(g){return g.type==='Feature'?g:turf.feature(g)}
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+function pointsInsidePolygon(poly,spacing){const f=getFeature(poly);const bbox=turf.bbox(f);const step=spacing/1000;const pts=turf.pointGrid(bbox,step,{units:'kilometers',mask:f});try{const c=turf.pointOnFeature(f);if(turf.booleanPointInPolygon(c,f))pts.features.unshift(c)}catch(e){}return pts.features;}
+// Scanner uses the same ULDK lookup, but reports errors visibly and handles response variations.
+document.getElementById('scanArea').onclick=async()=>{
+ const polys=collectScanPolygons();if(!polys.length){alert('Narysuj obszar poligonem na mapie. Nie znaleziono poligonu w zapisanych obiektach.');return;}
+ const spacing=Number(document.getElementById('gridSpacing').value)||60;let points=[];
+ for(const p of polys){try{points=points.concat(pointsInsidePolygon(p,spacing));}catch(e){console.warn('Błąd siatki próbkowania:',e)}}
+ if(!points.length){alert('Poligon został znaleziony, ale nie wygenerowano punktów. Spróbuj większego poligonu lub mniejszego odstępu.');return;}
+ const status=document.getElementById('scanStatus');scanStop=false;const btn=document.getElementById('scanArea');btn.disabled=true;let found=0,errors=0,duplicates=0;const known=new Set(records.map(r=>String(r.id)));let firstError='';
+ // Process all samples in sequential batches. A large area no longer fails merely because it exceeds 120 samples.
+ for(let i=0;i<points.length;i++){if(scanStop)break;const c=points[i].geometry.coordinates;status.textContent=`Próbkowanie ${i+1}/${points.length} · nowe działki: ${found} · błędy: ${errors}`;
+  try{const res=await lookupXY(c[1],c[0]);const id=String(res.id);if(!known.has(id)){known.add(id);geomLayer(res.geo,id,id);found++;}else duplicates++;}
+  catch(e){errors++;if(!firstError)firstError=String(e?.message||e);console.warn('ULDK sample failed',c,e);}
+  if(i<points.length-1)await sleep(450);
+ }
+ btn.disabled=false;status.textContent=(scanStop?'Przerwano':'Zakończono')+`. Próby: ${points.length}; dodano: ${found}; już na liście: ${duplicates}; błędy ULDK: ${errors}.`+(firstError?' Pierwszy błąd: '+firstError:'');
+ if(!found&&errors){status.textContent+=' Możliwy problem z dostępnością ULDK, CORS lub odpowiedzią usługi. Sprawdź połączenie i spróbuj pojedynczego kliknięcia na mapie.';}
+};
+document.getElementById('stopScan').onclick=()=>{scanStop=true;document.getElementById('scanStatus').textContent='Zatrzymywanie próbkowania…'};
+// Project export preserves the currently configured scan interval.
+const v6ExportPayload=()=>({version:6,created:new Date().toISOString(),records:records.map(r=>({id:r.id,label:r.label,geo:r.geo,included:r.included,visible:r.visible})),title:document.getElementById('title').value,forest:document.getElementById('forest').value,municipality:document.getElementById('municipality').value,purpose:document.getElementById('purpose').value,applicant:document.getElementById('applicant').value,date:document.getElementById('date').value,mapCenter:map.getCenter().toJSON(),mapZoom:map.getZoom(),gridSpacing:Number(document.getElementById('gridSpacing').value)});
+// --- v7.0 list filtering, parcel visibility, zoom and clipboard summary ---
+const v7filter=document.getElementById('parcelFilter');
+if(v7filter){v7filter.addEventListener('input',()=>{const q=v7filter.value.toLowerCase();document.querySelectorAll('#parcelList li').forEach(li=>{li.style.display=li.textContent.toLowerCase().includes(q)?'':'none'});});}
+document.getElementById('zoomEach')?.addEventListener('click',()=>{if(!records.length){alert('Lista jest pusta.');return}try{map.fitBounds(drawn.getBounds(),{padding:[30,30]})}catch(e){}});
+document.getElementById('copySummary')?.addEventListener('click',async()=>{const ids=records.map(r=>r.id).filter(Boolean);const area=document.getElementById('area')?.textContent||'';const txt=`${document.getElementById('title')?.value||'Mapa obszaru planowanych poszukiwań'}\nNadleśnictwo: ${document.getElementById('forest')?.value||'—'}\nGmina/obręb: ${document.getElementById('municipality')?.value||'—'}\nPowierzchnia (orientacyjnie): ${area}\nDziałki / oznaczenia:\n${ids.map(x=>'• '+x).join('\n')||'—'}\nOpis: ${document.getElementById('purpose')?.value||'—'}`;try{await navigator.clipboard.writeText(txt);document.getElementById('v7status').textContent='Podsumowanie skopiowane do schowka.'}catch(e){prompt('Skopiuj tekst poniżej:',txt)}});
+// Filter works with current list-rendering; add zoom-on-item and label-safe list refresh enhancement.
+// Export enriched project metadata, compatible with earlier project files.
+document.getElementById('exportProjectFile').onclick=()=>{const payload={version:7,created:new Date().toISOString(),records:records.map(r=>({id:r.id,label:r.label,geo:r.geo})),title:document.getElementById('title').value,forest:document.getElementById('forest').value,municipality:document.getElementById('municipality').value,purpose:document.getElementById('purpose').value,applicant:document.getElementById('applicant').value,date:document.getElementById('date').value,mapCenter:map.getCenter().toJSON(),mapZoom:map.getZoom(),gridSpacing:Number(document.getElementById('gridSpacing').value),notes:'Obszar i powierzchnia wymagają weryfikacji z oficjalnymi danymi geodezyjnymi.'};download(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'projekt_mapy_poszukiwan_v7.json')};
+
+// --- Generator v8.0: inclusion selection, layer visibility and focused exports ---
+records.forEach(r=>{if(typeof r.included==='undefined')r.included=true;if(typeof r.visible==='undefined')r.visible=true;});
+const v8Status=document.getElementById('v7status');
+function v8UpdateList(){
+ if(mergedLayer){drawn.removeLayer(mergedLayer);mergedLayer=null;}
+ const ul=document.getElementById('parcelList');ul.innerHTML='';
+ records.forEach((r,i)=>{
+  r.included=r.included!==false;r.visible=r.visible!==false;
+  if(r.visible){if(!drawn.hasLayer(r.layer))drawn.addLayer(r.layer);}else if(drawn.hasLayer(r.layer))drawn.removeLayer(r.layer);
+  const li=document.createElement('li');li.dataset.index=i;
+  li.innerHTML=`<div class="parcelrow"><input type="checkbox" title="Uwzględnij w eksporcie" ${r.included?'checked':''}><span>${esc(r.label||r.id)}</span></div><div class="row" style="gap:4px;flex:0 0 auto"><button title="Widoczność mapy">${r.visible?'👁':'◌'}</button><button title="Usuń">Usuń</button></div>`;
+  const cb=li.querySelector('input');cb.onchange=()=>{r.included=cb.checked;updateV8Stats();};
+  const btns=li.querySelectorAll('button');btns[0].onclick=()=>{r.visible=!r.visible;v8UpdateList();};btns[1].onclick=()=>{if(drawn.hasLayer(r.layer))drawn.removeLayer(r.layer);records.splice(i,1);v8UpdateList();};
+  ul.appendChild(li);
+ });
+ if(!records.length)ul.innerHTML='<li class="small">Brak działek/rysunków.</li>';
+ updateV8Stats();const q=(document.getElementById('parcelFilter').value||'').toLowerCase();Array.from(ul.children).forEach(li=>{li.style.display=li.textContent.toLowerCase().includes(q)?'':'none';});
+}
+function updateV8Stats(){const selected=records.filter(r=>r.included!==false);document.getElementById('selectedCount').textContent=selected.length; if(v8Status)v8Status.textContent=`${selected.length} z ${records.length} elementów uwzględnionych w eksporcie. Widoczność można zmieniać niezależnie.`;}
+// Override renderer for future additions/removals, preserving older behavior's area display.
+const updateV7Original=update;update=function(){updateV7Original();v8UpdateList();};
+// Initialize records' state and list after upgrades/import handlers have been declared.
+v8UpdateList();
+document.getElementById('selectIncluded').onclick=()=>{records.forEach(r=>r.included=true);v8UpdateList();};
+document.getElementById('deselectIncluded').onclick=()=>{records.forEach(r=>r.included=false);v8UpdateList();};
+document.getElementById('showAllLayers').onclick=()=>{records.forEach(r=>r.visible=true);v8UpdateList();};
+document.getElementById('hideAllLayers').onclick=()=>{records.forEach(r=>r.visible=false);v8UpdateList();};
+document.getElementById('fitSelected').onclick=()=>{const layers=records.filter(r=>r.included&&r.visible&&r.layer);if(!layers.length){alert('Brak wybranych i widocznych geometrii.');return;}const fg=L.featureGroup(layers.map(r=>r.layer));try{map.fitBounds(fg.getBounds(),{padding:[30,30]});}catch(e){alert('Nie udało się dopasować widoku.');}};
+document.getElementById('exportSelectedGeo').onclick=()=>{const feats=records.filter(r=>r.included).flatMap(r=>{const g=r.geo;return g.type==='Feature'?[{...g,properties:{...(g.properties||{}),parcelId:r.id}}]:[{type:'Feature',properties:{parcelId:r.id},geometry:g}];});if(!feats.length){alert('Nie wybrano elementów.');return;}download(new Blob([JSON.stringify({type:'FeatureCollection',features:feats},null,2)],{type:'application/geo+json'}),'wybrane_dzialki_v8.geojson');};
+// Selection-aware clipboard summary and TXT export.
+document.getElementById('copySummary').onclick=async()=>{const rs=records.filter(r=>r.included);const txt=`${document.getElementById('title').value||'Mapa obszaru planowanych poszukiwań'}\nNadleśnictwo: ${document.getElementById('forest').value||'—'}\nGmina/obręb: ${document.getElementById('municipality').value||'—'}\nDziałki / oznaczenia (${rs.length}):\n${rs.map(r=>'• '+r.id).join('\n')||'—'}\nOpis: ${document.getElementById('purpose').value||'—'}\n\nUwaga: powierzchnia i zakres wymagają weryfikacji w danych urzędowych.`;try{await navigator.clipboard.writeText(txt);v8Status.textContent='Podsumowanie wybranych elementów skopiowano.';}catch(e){prompt('Skopiuj podsumowanie:',txt);}};
+document.getElementById('exportTxt').onclick=()=>{const rs=records.filter(r=>r.included);if(!rs.length){alert('Nie wybrano działek.');return;}const lines=['LISTA DZIAŁEK / OBSZARÓW','Projekt: '+(document.getElementById('title').value||''),'Nadleśnictwo: '+(document.getElementById('forest').value||''),'Gmina / obręb: '+(document.getElementById('municipality').value||''),'','Lista:'].concat(rs.map((r,i)=>(i+1)+'. '+r.id));download(new Blob([lines.join('\n')],{type:'text/plain;charset=utf-8'}),'lista_wybranych_dzialek_v8.txt');};
+// Project v8 stores inclusion and visibility state and remains compatible with previous exports.
+document.getElementById('exportProjectFile').onclick=()=>{const payload={version:8,created:new Date().toISOString(),records:records.map(r=>({id:r.id,label:r.label,geo:r.geo,included:r.included!==false,visible:r.visible!==false})),title:document.getElementById('title').value,forest:document.getElementById('forest').value,municipality:document.getElementById('municipality').value,purpose:document.getElementById('purpose').value,applicant:document.getElementById('applicant').value,date:document.getElementById('date').value,mapCenter:map.getCenter().toJSON(),mapZoom:map.getZoom(),gridSpacing:Number(document.getElementById('gridSpacing').value),notes:'Zweryfikuj geometrie, kompletność działek i powierzchnię w danych urzędowych.'};download(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'projekt_mapy_poszukiwan_v8.json');};
+// Import and browser-save restore preserve v8 inclusion/visibility flags.
+document.getElementById('projectFile').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const payload=JSON.parse(await f.text());if(!Array.isArray(payload.records))throw Error('Plik nie zawiera listy obiektów');records.forEach(r=>{if(drawn.hasLayer(r.layer))drawn.removeLayer(r.layer)});records=[];payload.records.forEach(r=>{if(r.geo){geomLayer(r.geo,r.id||'Obiekt',r.label||r.id||'Obiekt');const rr=records[records.length-1];rr.included=r.included!==false;rr.visible=r.visible!==false;if(!rr.visible&&drawn.hasLayer(rr.layer))drawn.removeLayer(rr.layer);}});['title','forest','municipality','purpose','applicant','date'].forEach(k=>{if(payload[k]!=null&&document.getElementById(k))document.getElementById(k).value=payload[k]});if(payload.mapCenter&&payload.mapZoom)map.setView(payload.mapCenter,payload.mapZoom);else if(records.length)map.fitBounds(drawn.getBounds(),{padding:[25,25]});v8UpdateList();alert('Projekt zaimportowany.');}catch(err){alert('Nie udało się wczytać projektu: '+err.message)}finally{e.target.value=''}};
+document.getElementById('restoreProject').onclick=()=>{try{const payload=JSON.parse(localStorage.getItem('generatorMapProject')||'null');if(!payload){alert('Nie znaleziono zapisanego projektu.');return;}records.forEach(r=>{if(drawn.hasLayer(r.layer))drawn.removeLayer(r.layer)});records=[];(payload.records||[]).forEach(r=>{if(r.geo){geomLayer(r.geo,r.id,r.label);const rr=records[records.length-1];rr.included=r.included!==false;rr.visible=r.visible!==false;if(!rr.visible&&drawn.hasLayer(rr.layer))drawn.removeLayer(rr.layer);}});['title','forest','municipality','purpose','applicant','date'].forEach(k=>{if(payload[k]!=null&&document.getElementById(k))document.getElementById(k).value=payload[k]});if(payload.mapCenter&&payload.mapZoom)map.setView(payload.mapCenter,payload.mapZoom);v8UpdateList();alert('Projekt wczytany.');}catch(e){alert('Błąd wczytywania projektu: '+e.message)}};
+document.getElementById('saveProject').onclick=()=>{const payload={version:8,records:records.map(r=>({id:r.id,label:r.label,geo:r.geo,included:r.included!==false,visible:r.visible!==false})),title:document.getElementById('title').value,forest:document.getElementById('forest').value,municipality:document.getElementById('municipality').value,purpose:document.getElementById('purpose').value,applicant:document.getElementById('applicant').value,date:document.getElementById('date').value,mapCenter:map.getCenter().toJSON(),mapZoom:map.getZoom()};localStorage.setItem('generatorMapProject',JSON.stringify(payload));v8Status.textContent='Projekt v8 zapisany lokalnie.';};
+// Selection-aware print legend and title block.
+document.getElementById('print').onclick=()=>{const rs=records.filter(r=>r.included);const area=document.getElementById('area').textContent;const date=document.getElementById('date').value||new Date().toLocaleDateString('pl-PL');document.getElementById('printHeader').innerHTML=`<strong style="font-size:17px">${esc(document.getElementById('title').value||'Mapa obszaru planowanych poszukiwań')}</strong><br><div>Nadleśnictwo: ${esc(document.getElementById('forest').value||'—')} | Gmina/obręb: ${esc(document.getElementById('municipality').value||'—')}</div><div>Wnioskodawca: ${esc(document.getElementById('applicant').value||'—')} | Data: ${esc(date)} | Powierzchnia orientacyjna (wszystkie obiekty): ${esc(area)}</div>${document.getElementById('purpose').value?'<div>Opis: '+esc(document.getElementById('purpose').value)+'</div>':''}`;document.getElementById('printLegend').innerHTML=`<b>Legenda</b><br><span style="color:#d52e36">■</span> Zaznaczone geometrie<br><b>Lista uwzględnionych:</b><br>${rs.map(r=>esc(r.id)).join('<br>')||'—'}<br><br><span style="font-size:10px">Mapa poglądowa; zakres, powierzchnia i granice wymagają weryfikacji.</span>`;map.invalidateSize();setTimeout(()=>window.print(),350);};
+
+
+// v11: tap-to-add parcels (additive, without a confirmation step)
+map.off('click');
+map.on('click',async function(e){
+ if(!clickMode)return;
+ const pop=L.popup().setLatLng(e.latlng).setContent('<b>Odczyt działki…</b>').openOn(map);
+ try{
+  const result=await lookupXY(e.latlng.lat,e.latlng.lng);
+  const id=String(result.id||'');
+  if(records.some(r=>String(r.id)===id)){pop.setContent('<b>Działka już zaznaczona:</b><br>'+esc(id));return;}
+  geomLayer(result.geo,id,id);
+  pop.setContent('<b>Dodano działkę:</b><br>'+esc(id)+'<br><small>Kliknij kolejną działkę, aby dodać ją do zestawu.</small>');
+ }catch(err){pop.setContent('<b>Nie udało się pobrać działki.</b><br>'+esc(err?.message||String(err))+'<br><small>Warstwa WMS to obraz granic; pobranie geometrii wymaga działającego zapytania ULDK.</small>');}
+});
+</script><div id="pwaInstall" style="display:none;position:fixed;z-index:99999;bottom:16px;left:12px;right:12px;padding:12px;background:#20354b;color:#fff;border:1px solid #66c28b;border-radius:14px;font:16px system-ui;box-shadow:0 4px 24px #0008"><span>🌲 Zainstaluj Generator Map Poszukiwań</span><button id="pwaInstallBtn" style="float:right;padding:8px 12px;border:0;border-radius:9px;background:#66c28b;color:#092016;font-weight:700">Instaluj</button></div><script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW registration:',e)));}let pwaPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();pwaPrompt=e;const bar=document.getElementById('pwaInstall');if(bar)bar.style.display='block'});document.getElementById('pwaInstallBtn')?.addEventListener('click',async()=>{if(pwaPrompt){pwaPrompt.prompt();await pwaPrompt.userChoice;pwaPrompt=null;document.getElementById('pwaInstall').style.display='none'}else alert('Instalacja: otwórz menu Chrome (⋮) i wybierz „Dodaj do ekranu głównego” lub „Zainstaluj aplikację”.')});window.addEventListener('appinstalled',()=>{const bar=document.getElementById('pwaInstall');if(bar)bar.style.display='none'});</script></body></html>
+<!-- Generator Map Poszukiwań v9.0 enhancements -->
+<style>
+.v9label{background:#fff;border:1px solid #222;border-radius:4px;padding:2px 5px;color:#111;font:bold 11px Arial;white-space:nowrap;box-shadow:0 1px 3px #0005}.v9north{display:none}.v9printTable{display:none}@media print{.v9north{display:block!important;position:fixed;top:95px;right:20px;z-index:3000;background:#fff;color:#111;border:1px solid #333;padding:6px;text-align:center;font:bold 18px Arial}.v9printTable{display:block!important;position:fixed;right:12px;bottom:8px;z-index:3000;background:#fff;color:#111;border:1px solid #333;padding:7px;font:10px Arial;max-width:38vw;max-height:42vh;overflow:hidden}#map{height:160mm!important;margin-top:65px!important}}
+</style>
+<script>
+(()=>{
+ const side=document.querySelector('.side');
+ const hdr=document.getElementById('printHeader');
+ const table=document.createElement('div');table.className='v9printTable';table.id='v9printTable';document.getElementById('map').appendChild(table);
+ const north=document.createElement('div');north.className='v9north';north.innerHTML='↑<br><small>N</small>';document.getElementById('map').appendChild(north);
+ const labelGroup=L.layerGroup().addTo(map);let labelState=false;
+ function selected(){return records.filter(r=>r.included!==false)}
+ function labelGeo(g){try{return turf.centerOfMass(g).geometry.coordinates}catch(e){try{return turf.centroid(g).geometry.coordinates}catch(x){return null}}}
+ function makeLabels(){labelGroup.clearLayers();selected().forEach(r=>{let xy=labelGeo(r.geo);if(!xy)return;let marker=L.marker([xy[1],xy[0]],{interactive:false,icon:L.divIcon({className:'',html:`<div class="v9label">${esc(r.id||r.label||'')}</div>`,iconSize:null})});labelGroup.addLayer(marker)});}
+ const oldPrint=document.getElementById('print').onclick;
+ document.getElementById('print').onclick=()=>{
+   const rs=selected();makeLabels();labelState=map.hasLayer(labelGroup);
+   const area=document.getElementById('area').textContent,date=document.getElementById('date').value||new Date().toLocaleDateString('pl-PL');
+   hdr.innerHTML=`<strong style="font-size:18px">${esc(document.getElementById('title').value||'Mapa obszaru planowanych poszukiwań')}</strong><div>Nadleśnictwo: ${esc(document.getElementById('forest').value||'—')} | Gmina/obręb: ${esc(document.getElementById('municipality').value||'—')}</div><div>Wnioskodawca: ${esc(document.getElementById('applicant').value||'—')} | Data: ${esc(date)} | Powierzchnia orientacyjna: ${esc(area)}</div>${document.getElementById('purpose').value?`<div>Opis: ${esc(document.getElementById('purpose').value)}</div>`:''}`;
+   document.getElementById('printLegend').innerHTML=`<b>Legenda</b><br><span style="color:#d52e36">■</span> Obszar zaznaczony<br><b>Wykaz działek (${rs.length}):</b><br>${rs.map((r,i)=>`${i+1}. ${esc(r.id||r.label)}`).join('<br>')||'—'}<br><br><span style="font-size:10px">Mapa poglądowa; geometrie i powierzchnie zweryfikuj w źródłach urzędowych.</span>`;
+   table.innerHTML=`<b>Wykaz działek / obszarów</b><table style="border-collapse:collapse;width:100%;margin-top:4px"><tr><th style="border-bottom:1px solid #555;text-align:left">Lp.</th><th style="border-bottom:1px solid #555;text-align:left">Identyfikator</th></tr>${rs.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.id||r.label||'')}</td></tr>`).join('')}</table>`;
+   map.invalidateSize();setTimeout(()=>window.print(),400);
+ };
+ window.addEventListener('afterprint',()=>{labelGroup.clearLayers();hdr.innerHTML='';document.getElementById('printLegend').innerHTML='';table.innerHTML='';map.invalidateSize()});
+ // v9 information panel and exports
+ const v9=document.createElement('section');v9.className='section';v9.innerHTML='<h2>✨ 5.0 Arkusz mapy – v9</h2><div class="small">Wydruk zawiera oznaczenia działek na mapie, strzałkę północy i tabelę wykazu. Wydruk PDF otwiera systemowe okno drukowania.</div><button id="v9print">Przygotuj arkusz A4 poziomo</button><button id="v9labels">Pokaż / ukryj etykiety na mapie</button><button id="v9exportTable">Eksport wykazu działek CSV</button>';
+ side.appendChild(v9);
+ document.getElementById('v9print').onclick=()=>document.getElementById('print').click();
+ let showLabels=false;document.getElementById('v9labels').onclick=()=>{showLabels=!showLabels;if(showLabels)makeLabels();else labelGroup.clearLayers();};
+ document.getElementById('v9exportTable').onclick=()=>{const rs=selected();if(!rs.length){alert('Brak wybranych elementów.');return}let csv='Lp.;Identyfikator\n'+rs.map((r,i)=>`${i+1};"${String(r.id||r.label||'').replace(/"/g,'""')}"`).join('\n');download(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),'wykaz_dzialek_v9.csv')};
+ const titleEl=document.querySelector('h1');if(titleEl)titleEl.textContent='🌲 Generator Map Poszukiwań v9.0';document.title='Generator Map Poszukiwań v9.0';
+})();
+
+</script>
+<script>
+(()=>{
+ const side=document.querySelector('.side');
+ const v10=document.createElement('section');v10.className='section';v10.innerHTML='<h2>🗺️ 6.0 Arkusz mapy – v10</h2><div class="small">Skala graficzna, zestawienie powierzchni działek, wymiary obszaru, wybór formatu A4/A3 i rozszerzony wykaz do CSV.</div><label class="small">Format wydruku</label><select class="input" id="v10format"><option value="A4">A4 – poziomo</option><option value="A3">A3 – poziomo</option></select><button id="v10print">Przygotuj arkusz v10</button><button id="v10csv">Eksport CSV z powierzchniami</button><div class="stats" id="v10summary">Zaznacz działki, aby wyświetlić zestawienie.</div>';
+ side.appendChild(v10);
+ try{L.control.scale({imperial:false,metric:true,maxWidth:180}).addTo(map)}catch(e){}
+ const areaHa=g=>{try{return turf.area(g)/10000}catch(e){return 0}};
+ const perimeterKm=g=>{try{return turf.length(turf.polygonToLine(g),{units:'kilometers'})}catch(e){try{return turf.length(g,{units:'kilometers'})}catch(x){return 0}}};
+ const chosen=()=>records.filter(r=>r.included!==false);
+ function updateSummary(){let rs=chosen(),total=rs.reduce((a,r)=>a+areaHa(r.geo),0);let bounds=null;try{if(rs.length){let fc={type:'FeatureCollection',features:rs.map(r=>r.geo.type==='Feature'?r.geo:turf.feature(r.geo))};bounds=turf.bbox(fc)}}catch(e){};let dims=bounds?`<div class="stat"><span>Rozpiętość W–E</span><b>${((bounds[2]-bounds[0])*111.32*Math.cos(((bounds[1]+bounds[3])/2)*Math.PI/180)).toFixed(2)} km</b></div><div class="stat"><span>Rozpiętość N–S</span><b>${((bounds[3]-bounds[1])*111.32).toFixed(2)} km</b></div>`:'';document.getElementById('v10summary').innerHTML=`<div class="stat"><span>Wybrane obiekty</span><b>${rs.length}</b></div><div class="stat"><span>Powierzchnia sumaryczna (orientacyjna)</span><b>${total.toFixed(3)} ha</b></div>${dims}<div class="small">Powierzchnia sumaryczna jest sumą powierzchni geometrii; nakładające się poligony mogą powodować zawyżenie.</div>`}
+ updateSummary();try{const originalUpdate=update;update=function(){originalUpdate();updateSummary()}}catch(e){}
+ document.getElementById('v10csv').onclick=()=>{let rs=chosen();if(!rs.length){alert('Brak wybranych działek.');return}let rows=[['Lp.','Identyfikator','Powierzchnia (ha)','Obwód (km)'],...rs.map((r,i)=>[i+1,r.id||r.label||'',areaHa(r.geo).toFixed(4),perimeterKm(r.geo).toFixed(4)])];let csv=rows.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');download(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),'wykaz_dzialek_powierzchnie_v10.csv')};
+ document.getElementById('v10print').onclick=()=>{let rs=chosen();if(!rs.length){alert('Najpierw wybierz działki.');return}const format=document.getElementById('v10format').value;document.getElementById('printHeader').innerHTML=`<strong style="font-size:18px">${esc(document.getElementById('title').value||'Mapa obszaru planowanych poszukiwań')}</strong><div>Nadleśnictwo: ${esc(document.getElementById('forest').value||'—')} | Gmina/obręb: ${esc(document.getElementById('municipality').value||'—')}</div><div>Wnioskodawca: ${esc(document.getElementById('applicant').value||'—')} | Data: ${esc(document.getElementById('date').value||new Date().toLocaleDateString('pl-PL'))} | Suma powierzchni (orientacyjna): ${rs.reduce((a,r)=>a+areaHa(r.geo),0).toFixed(3)} ha</div>${document.getElementById('purpose').value?`<div>Opis: ${esc(document.getElementById('purpose').value)}</div>`:''}`;
+ let table=document.getElementById('v9printTable');table.innerHTML=`<b>Wykaz obiektów – v10</b><table style="border-collapse:collapse;width:100%;margin-top:4px"><tr><th style="border-bottom:1px solid #555;text-align:left">Lp.</th><th style="border-bottom:1px solid #555;text-align:left">Identyfikator</th><th style="border-bottom:1px solid #555;text-align:right">ha</th></tr>${rs.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.id||r.label||'')}</td><td style="text-align:right">${areaHa(r.geo).toFixed(3)}</td></tr>`).join('')}<tr><td colspan="2"><b>SUMA</b></td><td style="text-align:right"><b>${rs.reduce((a,r)=>a+areaHa(r.geo),0).toFixed(3)}</b></td></tr></table>`;
+ document.getElementById('printLegend').innerHTML=`<b>Legenda</b><br><span style="color:#d52e36">■</span> Obszar zaznaczony<br><span style="font-size:10px">Powierzchnie orientacyjne, obliczone na podstawie dostępnych geometrii. Weryfikuj granice w urzędowych źródłach.</span>`;
+ let styleTag=document.getElementById('v10printstyle');if(!styleTag){styleTag=document.createElement('style');styleTag.id='v10printstyle';document.head.appendChild(styleTag)}styleTag.textContent=`@media print{@page{size:${format} landscape;margin:8mm}#map{height:${format==='A3'?'270mm':'180mm'}!important;margin-top:72px!important}.v9printTable{max-width:45vw;max-height:48vh;font-size:${format==='A3'?'11px':'9px'}!important}}`;
+ map.invalidateSize();setTimeout(()=>window.print(),400)};
+ const h=document.querySelector('h1');if(h)h.textContent='🌲 Generator Map Poszukiwań v11.8';document.title='Generator Map Poszukiwań v11.8';
+ window.addEventListener('afterprint',updateSummary);
+})();
+
+</script>
+
+<!-- v11.8: parser for nested WKT rings/polygons and click-to-add selection -->
+<script>
+(function(){
+ if(typeof map==='undefined'||typeof geomLayer==='undefined') return;
+ function splitTopLevel(text){
+  const out=[];let depth=0,start=0;
+  for(let i=0;i<text.length;i++){
+   const c=text[i]; if(c==='(')depth++; else if(c===')')depth--;
+   else if(c===','&&depth===0){out.push(text.slice(start,i).trim());start=i+1;}
+   if(depth<0)throw Error('Niespójne nawiasy WKT');
+  }
+  if(depth!==0)throw Error('Niedomknięte nawiasy WKT');
+  if(text.slice(start).trim())out.push(text.slice(start).trim());
+  return out;
+ }
+ function unwrap(s){s=s.trim();if(s[0]!=='('||s[s.length-1]!==')')throw Error('Nieprawidłowy fragment WKT');return s.slice(1,-1).trim();}
+ function ring(s){
+  s=unwrap(s);
+  const pts=splitTopLevel(s).map(pair=>{
+   const a=pair.trim().split(/\s+/).map(Number);
+   if(a.length<2||!Number.isFinite(a[0])||!Number.isFinite(a[1]))throw Error('Nieprawidłowe współrzędne WKT');
+   return [a[0],a[1]];
+  });
+  if(pts.length<4)throw Error('Pierścień ma mniej niż 4 punkty');
+  if(pts[0][0]!==pts[pts.length-1][0]||pts[0][1]!==pts[pts.length-1][1])pts.push([...pts[0]]);
+  if(pts.length<4)throw Error('Pierścień nie jest zamknięty');
+  return pts;
+ }
+ function polygon(s){return splitTopLevel(unwrap(s)).map(ring);}
+ function parseWKT(wkt){
+  wkt=String(wkt||'').replace(/^\s*SRID\s*=\s*\d+\s*;\s*/i,'').trim();
+  const m=wkt.match(/^(POLYGON|MULTIPOLYGON)\s*(\([\s\S]*\))$/i);if(!m)throw Error('Nieobsługiwany format WKT');
+  if(m[1].toUpperCase()==='POLYGON')return {type:'Polygon',coordinates:polygon(m[2])};
+  return {type:'MultiPolygon',coordinates:splitTopLevel(unwrap(m[2])).map(polygon)};
+ }
+ async function lookupClick(lat,lon){
+  const xy=lon.toFixed(7)+','+lat.toFixed(7)+',4326';
+  const params=new URLSearchParams({request:'GetParcelByXY',xy:xy,result:'geom_wkt,id',srid:'4326'});
+  const url='https://uldk.gugik.gov.pl/?'+params.toString();
+  let resp;try{resp=await fetch(url,{mode:'cors'});}catch(e){throw Error('Błąd sieci/CORS ULDK: '+(e.message||e));}
+  if(!resp.ok)throw Error('ULDK HTTP '+resp.status);
+  const raw=(await resp.text()).trim(),lines=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(!lines.length)throw Error('ULDK zwrócił pustą odpowiedź');
+  if(lines[0]!=='0')throw Error('ULDK status '+lines[0]+': '+lines.slice(1).join(' ').slice(0,220));
+  if(lines.length<2)throw Error('ULDK nie zwrócił danych');
+  const fields=lines[1].split('|'),wkt=fields[0],id=fields[1]||fields[2]||'Działka rozpoznana';
+  let geo;try{geo=parseWKT(wkt);}catch(e){throw Error('Parser geometrii: '+e.message+' | '+String(wkt).slice(0,150));}
+  return {geo,id};
+ }
+ map.off('click');
+ map.on('click',async function(e){
+  if(!clickMode)return;
+  const pop=L.popup({closeButton:true}).setLatLng(e.latlng).setContent('<b>Rozpoznawanie działki…</b>').openOn(map);
+  try{
+   const result=await lookupClick(e.latlng.lat,e.latlng.lng),id=String(result.id||'Działka');
+   if(records.some(r=>String(r.id)===id)){pop.setContent('<b>Ta działka jest już zaznaczona:</b><br>'+esc(id));return;}
+   geomLayer(result.geo,id,id);
+   const r=records[records.length-1];if(r.layer&&r.layer.setStyle)r.layer.setStyle({color:'#e53935',weight:3,fillColor:'#ffb300',fillOpacity:.35});
+   pop.setContent('<b>Dodano działkę:</b><br>'+esc(id)+'<br><small>Dotknij kolejnej działki — zaznaczenia zostaną zachowane.</small>');
+   try{if(typeof mergedGeoV4==='function'){const g=mergedGeoV4();if(g){if(mergedLayer)drawn.removeLayer(mergedLayer);mergedLayer=L.geoJSON(g,{style:{color:'#16a34a',weight:4,fillColor:'#22c55e',fillOpacity:.08,dashArray:'6 4'}}).addTo(drawn);}}}catch(err){console.warn('Obrys zbiorczy:',err);}
+  }catch(err){pop.setContent('<b>Nie udało się rozpoznać działki.</b><br>'+esc(err.message||String(err)));}
+ });
+ const h=document.querySelector('h1');if(h)h.textContent='🌲 Generator Map Poszukiwań v11.8';document.title='Generator Map Poszukiwań v11.8';
+})();
+</script>
